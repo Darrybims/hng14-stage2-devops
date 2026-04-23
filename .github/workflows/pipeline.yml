@@ -1,4 +1,4 @@
-name: HNG Stage 2 Pipeline - Containerizing and Shipping Microservices Application
+name: CI/CD Pipeline
 
 on:
   push:
@@ -7,43 +7,40 @@ on:
   pull_request:
 
 jobs:
-
   lint:
-  runs-on: ubuntu-latest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-  steps:
-    - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.12"
+      - name: Install flake8
+        run: pip install flake8
 
-    - name: Install flake8
-      run: pip install flake8
+      - name: Run Python Lint
+        run: flake8 api worker --max-line-length=120 --ignore=E302,E305,W293
 
-    - name: Run Python Lint
-      run: flake8 api worker --max-line-length=120 --ignore=E302,E305,W293
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-    - name: Setup Node
-      uses: actions/setup-node@v4
-      with:
-        node-version: 20
+      - name: Install frontend packages
+        run: |
+          cd frontend
+          npm install
 
-    - name: Install frontend packages
-      run: |
-        cd frontend
-        npm install
-
-    - name: Run JS Lint (non-blocking)
-      run: |
-        cd frontend
-        npx eslint . || true
+      - name: Run JS Lint (non-blocking)
+        run: |
+          cd frontend
+          npx eslint . || true
 
   test:
     needs: lint
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -60,7 +57,6 @@ jobs:
   build:
     needs: test
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -76,21 +72,20 @@ jobs:
   security-scan:
     needs: build
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
       - name: Run Trivy Scan
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: fs
-          severity: CRITICAL
+          scan-type: 'fs'
+          format: 'table'
+          severity: 'CRITICAL'
           exit-code: 1
 
   integration-test:
     needs: security-scan
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -111,7 +106,6 @@ jobs:
     if: github.ref == 'refs/heads/main'
     needs: integration-test
     runs-on: ubuntu-latest
-
     steps:
       - name: Simulated Deploy
         run: echo "Rolling deployment starts here"
