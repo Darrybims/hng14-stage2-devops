@@ -1,0 +1,56 @@
+services:
+  redis:
+    image: redis:7-alpine
+    networks: [backend]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.5"
+
+  api:
+    build: ./api
+    env_file: .commonenv
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks: [backend]
+    healthcheck:
+      # Assuming your express/python app has a health route
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+
+  worker:
+    build: ./worker
+    env_file: .commonenv
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks: [backend]
+
+  frontend:
+    build: ./frontend
+    env_file: .commonenv
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "80:3000"
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: bridge

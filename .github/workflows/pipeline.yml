@@ -1,0 +1,113 @@
+name: HNG Stage 2 Pipeline - Containerizing and Shipping Microservices Application
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+
+jobs:
+
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Python Linter
+        run: pip install flake8
+
+      - name: Run Python Lint
+        run: flake8 api worker
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Frontend Dependencies
+        run: |
+          cd frontend
+          npm install
+
+      - name: Run ESLint
+        run: |
+          cd frontend
+          npx eslint . || true
+
+  test:
+    needs: lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Python Packages
+        run: |
+          pip install -r api/requirements.txt
+          pip install pytest httpx
+
+      - name: Run Tests
+        run: |
+          cd api
+          pytest
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build API Image
+        run: docker build -t api:latest ./api
+
+      - name: Build Worker Image
+        run: docker build -t worker:latest ./worker
+
+      - name: Build Frontend Image
+        run: docker build -t frontend:latest ./frontend
+
+  security-scan:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          severity: CRITICAL
+          exit-code: 1
+
+  integration-test:
+    needs: security-scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start Full Stack
+        run: docker compose up -d --build
+
+      - name: Wait for Startup
+        run: sleep 20
+
+      - name: Submit Job
+        run: curl -X POST http://localhost/submit
+
+      - name: Shutdown Stack
+        if: always()
+        run: docker compose down -v
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: integration-test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Simulated Deploy
+        run: echo "Rolling deployment starts here"
