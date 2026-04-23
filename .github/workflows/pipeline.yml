@@ -47,12 +47,12 @@ jobs:
       - name: Install Python Packages
         run: |
           pip install -r api/requirements.txt
-          pip install pytest httpx
+          pip install pytest httpx fastapi
 
       - name: Run Tests
         run: |
-          cd api
-          pytest
+          export PYTHONPATH=$PYTHONPATH:$(pwd)/api
+          pytest api/
 
   build:
     needs: test
